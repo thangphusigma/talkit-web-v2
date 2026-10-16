@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Microsoft TalkIt! trên web</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f4ee; --fg:#1d2a33; --mut:#5d6b75; --acc:#1b5e8a; --line:#cfd6db; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14191d; --fg:#e6ebee; --mut:#93a1ab; --acc:#6bb4e0; --line:#2b353c; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 Georgia, "Times New Roman", serif; }
+  main { max-width:760px; margin:0 auto; padding:20px 16px 40px; }
+  h1 { font-size:1.5rem; margin:0 0 4px; }
+  p { margin:6px 0; }
+  .mut { color:var(--mut); font-size:.92rem; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; align-items:center; }
+  select, button { font:inherit; padding:8px 12px; border:1px solid var(--line); border-radius:6px; background:transparent; color:inherit; }
+  button.go { background:var(--acc); color:#fff; border-color:var(--acc); }
+  button:focus-visible, select:focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
+  #status { min-height:1.5em; font-size:.92rem; color:var(--mut); }
+  #screen_container { margin-top:10px; border:1px solid var(--line); background:#000; overflow:auto; max-width:100%; }
+  #screen_container canvas { max-width:100%; height:auto !important; image-rendering:pixelated; }
+  ol { padding-left:20px; margin:8px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Microsoft TalkIt! (SoftVoice, 1996)</h1>
+  <p class="mut">Chạy một máy tính ảo ngay trong trình duyệt. Đĩa CD có sẵn app được gắn vào ổ D:.</p>
+
+  <div class="bar">
+    <label for="os">Hệ điều hành</label>
+    <select id="os">
+      <option value="win98">Windows 98 (nhẹ, thử trước)</option>
+      <option value="win95">Windows 95</option>
+      <option value="win2000">Windows 2000 (có sẵn MFC40, rất nặng)</option>
+      <option value="reactos">ReactOS</option>
+    </select>
+    <button class="go" id="start">Bật máy ảo</button>
+    <button id="stop" disabled>Tắt</button>
+  </div>
+  <div id="status" role="status">Chưa chạy.</div>
+
+  <div id="screen_container">
+    <div style="white-space:pre;font:14px monospace;line-height:14px"></div>
+    <canvas></canvas>
+  </div>
+
+  <ol class="mut">
+    <li>Đợi Windows khởi động xong (vài phút, lần đầu tải đĩa về từ mạng).</li>
+    <li>Mở <b>My Computer → ổ CD (D:)</b> rồi bấm đúp <b>TALKIT!.EXE</b>.</li>
+    <li>Bấm vào màn hình để gõ phím và điều khiển chuột.</li>
+  </ol>
+  <p class="mut">Ghi chú: ảnh đĩa Windows được tải từ máy chủ ảnh của dự án v86 (i.copy.sh), không nằm trong repo này. Đổi nguồn bằng <code>?cdn=https://.../</code>.</p>
+</main>
+
+<script src="libv86.js"></script>
+<script>
+"use strict";
+const CDN = new URLSearchParams(location.search).get("cdn") || "https://i.copy.sh/";
+const OS = {
+  win98:   { mem:128, name:"windows98/.img",    size:314572800,  chunk:262144 },
+  win95:   { mem:64,  name:"windows95-v3/.img", size:471859200,  chunk:262144 },
+  win2000: { mem:512, name:"windows2k-v2/.img", size:2147483648, chunk:262144 },
+  reactos: { mem:512, name:"reactos-v2/.img",   size:681574400,  chunk:1048576 }
+};
+const $ = id => document.getElementById(id);
+let emu = null;
+
+function setStatus(t) { $("status").textContent = t; }
+
+function start() {
+  const o = OS[$("os").value];
+  $("start").disabled = true; $("stop").disabled = false;
+  setStatus("Đang khởi động " + $("os").selectedOptions[0].text + "…");
+  emu = window.emulator = new V86({
+    wasm_path: "v86.wasm",
+    memory_size: o.mem * 1024 * 1024,
+    vga_memory_size: 8 * 1024 * 1024,
+    screen_container: $("screen_container"),
+    bios: { url: "seabios.bin" },
+    vga_bios: { url: "vgabios.bin" },
+    hda: { url: CDN + o.name, size: o.size, async: true, fixed_chunk_size: o.chunk, use_parts: true },
+    cdrom: { url: "talkit.iso" },
+    boot_order: 0x312,           // đĩa cứng trước, rồi CD
+    autostart: true
+  });
+  emu.add_listener("download-progress", e => {
+    if (e.file_name && e.file_name.endsWith(".img")) setStatus("Đang tải ảnh đĩa Windows từ " + CDN + " …");
+  });
+  emu.add_listener("download-error", e => {
+    setStatus("Không tải được " + (e.file_name || "tệp") + ". Kiểm tra mạng hoặc đổi ?cdn=");
+  });
+  emu.add_listener("emulator-started", () => setStatus("Máy ảo đang chạy. Bấm vào màn hình để điều khiển."));
+}
+
+function stop() {
+  if (emu) { emu.destroy(); emu = null; }
+  $("start").disabled = false; $("stop").disabled = true;
+  setStatus("Đã tắt.");
+}
+
+$("start").onclick = start;
+$("stop").onclick = stop;
+</script>
+</body>
+</html>
