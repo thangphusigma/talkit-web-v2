@@ -26,7 +26,7 @@
 <body>
 <main>
   <h1>Microsoft TalkIt! (SoftVoice, 1996)</h1>
-  <p class="mut">Chạy một máy tính ảo ngay trong trình duyệt. Đĩa CD có sẵn app được gắn vào ổ D:.</p>
+  <p class="mut">Chạy một máy tính ảo ngay trong trình duyệt. Đĩa mềm có sẵn app được gắn vào ổ A:.</p>
 
   <div class="bar">
     <label for="os">Hệ điều hành</label>
@@ -48,7 +48,7 @@
 
   <ol class="mut">
     <li>Đợi Windows khởi động xong (vài phút, lần đầu tải đĩa về từ mạng).</li>
-    <li>Mở <b>My Computer → ổ CD (D:)</b> rồi bấm đúp <b>TALKIT!.EXE</b>.</li>
+    <li>Mở <b>My Computer → ổ đĩa mềm (A:)</b> rồi bấm đúp <b>TALKIT!.EXE</b>. (Nên chép 4 file sang ổ C: trước khi chạy.)</li>
     <li>Bấm vào màn hình để gõ phím và điều khiển chuột.</li>
   </ol>
   <p class="mut">Ghi chú: ảnh đĩa Windows được tải từ máy chủ ảnh của dự án v86 (i.copy.sh), không nằm trong repo này. Đổi nguồn bằng <code>?cdn=https://.../</code>.</p>
@@ -62,8 +62,9 @@ const OS = {
   win98:   { mem:128, name:"windows98/.img",    size:314572800,  chunk:262144 },
   win95:   { mem:64,  name:"windows95-v3/.img", size:471859200,  chunk:262144 },
   win2000: { mem:512, name:"windows2k-v2/.img", size:2147483648, chunk:262144 },
-  reactos: { mem:512, name:"reactos-v2/.img",   size:681574400,  chunk:1048576 }
+  reactos: { mem:512, name:"reactos-v2/.img",   size:681574400,  chunk:1048576, acpi:true }
 };
+const USE_CD = new URLSearchParams(location.search).has("cd");
 const $ = id => document.getElementById(id);
 let emu = null;
 
@@ -81,8 +82,10 @@ function start() {
     bios: { url: "seabios.bin" },
     vga_bios: { url: "vgabios.bin" },
     hda: { url: CDN + o.name, size: o.size, async: true, fixed_chunk_size: o.chunk, use_parts: true },
-    cdrom: { url: "talkit.iso" },
+    fda: { url: "talkit.img" },          // đĩa mềm A: chứa app
+    ...(USE_CD ? { cdrom: { url: "talkit.iso" } } : {}),
     boot_order: 0x312,           // đĩa cứng trước, rồi CD
+    acpi: !!o.acpi,
     autostart: true
   });
   emu.add_listener("download-progress", e => {
