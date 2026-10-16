@@ -18,8 +18,8 @@
   button.go { background:var(--acc); color:#fff; border-color:var(--acc); }
   button:focus-visible, select:focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
   #status { min-height:1.5em; font-size:.92rem; color:var(--mut); }
-  #screen_container { margin-top:10px; border:1px solid var(--line); background:#000; overflow:auto; max-width:100%; }
-  #screen_container canvas { max-width:100%; height:auto !important; image-rendering:pixelated; }
+  /* Khung phải ôm sát canvas, nếu không v86 tính sai vị trí chuột */
+  #screen_container { display:inline-block; line-height:0; margin-top:10px; background:#000; box-shadow:0 0 0 1px var(--line); }
   ol { padding-left:20px; margin:8px 0; }
 </style>
 </head>
@@ -68,6 +68,18 @@ const USE_CD = new URLSearchParams(location.search).has("cd");
 const $ = id => document.getElementById(id);
 let emu = null;
 
+// Thu phóng canvas vừa chiều rộng trang bằng API của v86 (chuột vẫn đúng vị trí)
+function fit() {
+  const c = document.querySelector("#screen_container canvas");
+  if (!emu || !c || !c.width || c.style.display === "none") return;
+  emu.screen_set_scale(1, 1);
+  const w = c.getBoundingClientRect().width;
+  const avail = document.documentElement.clientWidth - 32;
+  if (w > 0 && Math.abs(avail - w) > 2) { const k = avail / w; emu.screen_set_scale(k, k); }
+}
+window.addEventListener("resize", () => setTimeout(fit, 100));
+window.addEventListener("orientationchange", () => setTimeout(fit, 300));
+
 function setStatus(t) { $("status").textContent = t; }
 
 function start() {
@@ -94,6 +106,7 @@ function start() {
   emu.add_listener("download-error", e => {
     setStatus("Không tải được " + (e.file_name || "tệp") + ". Kiểm tra mạng hoặc đổi ?cdn=");
   });
+  emu.add_listener("screen-set-size", () => setTimeout(fit, 60));
   emu.add_listener("emulator-started", () => setStatus("Máy ảo đang chạy. Bấm vào màn hình để điều khiển."));
 }
 
