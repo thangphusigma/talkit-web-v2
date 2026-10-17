@@ -20,6 +20,8 @@
   #status { min-height:1.5em; font-size:.92rem; color:var(--mut); }
   /* Khung phải ôm sát canvas, nếu không v86 tính sai vị trí chuột */
   #screen_container { display:inline-block; line-height:0; margin-top:10px; background:#000; box-shadow:0 0 0 1px var(--line); }
+  .keys button { padding:6px 10px; min-width:40px; }
+  .phone_keyboard { position:fixed; left:0; bottom:0; width:1px; height:1px; padding:0; border:0; opacity:0; font-size:16px; resize:none; }
   ol { padding-left:20px; margin:8px 0; }
 </style>
 </head>
@@ -40,6 +42,20 @@
     <button id="stop" disabled>Tắt</button>
   </div>
   <div id="status" role="status">Chưa chạy.</div>
+
+  <div class="bar keys" id="keys">
+    <button id="kb" type="button">⌨ Bàn phím</button>
+    <button type="button" data-k="27">Esc</button>
+    <button type="button" data-k="9">Tab</button>
+    <button type="button" data-k="13">Enter</button>
+    <button type="button" data-k="37" aria-label="Trái">←</button>
+    <button type="button" data-k="38" aria-label="Lên">↑</button>
+    <button type="button" data-k="40" aria-label="Xuống">↓</button>
+    <button type="button" data-k="39" aria-label="Phải">→</button>
+    <button type="button" id="cad">Ctrl+Alt+Del</button>
+  </div>
+  <textarea id="phonekb" class="phone_keyboard" rows="1" aria-label="Bàn phím cho máy ảo"
+    autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"></textarea>
 
   <div id="screen_container">
     <div style="white-space:pre;font:14px monospace;line-height:14px"></div>
@@ -115,6 +131,47 @@ function stop() {
   $("start").disabled = false; $("stop").disabled = true;
   setStatus("Đã tắt.");
 }
+
+// ---- Bàn phím điện thoại ----
+// v86 chỉ nhận phím từ ô nhập có class "phone_keyboard". Ô này ẩn, bấm nút để gọi bàn phím lên.
+const ta = $("phonekb"), SENT = "\u200b".repeat(40);
+let composing = false, comp = "", resetT = 0;
+function resetKb() {
+  if (composing) return;
+  ta.value = SENT;
+  try { ta.setSelectionRange(SENT.length, SENT.length); } catch (e) {}
+}
+// Bàn phím Android hay gửi chữ dạng "đang soạn": gõ theo phần thay đổi để không mất chữ
+function typeDiff(next) {
+  if (!emu) return;
+  let i = 0;
+  while (i < comp.length && i < next.length && comp[i] === next[i]) i++;
+  for (let k = comp.length; k > i; k--) emu.keyboard_send_keys([8]);
+  if (next.length > i) emu.keyboard_send_text(next.slice(i));
+  comp = next;
+}
+ta.addEventListener("focus", () => { resetKb(); $("kb").textContent = "⌨ Ẩn bàn phím"; });
+ta.addEventListener("blur",  () => { $("kb").textContent = "⌨ Bàn phím"; });
+ta.addEventListener("compositionstart", () => { composing = true; comp = ""; });
+ta.addEventListener("compositionend", e => {
+  if (e.data !== undefined && e.data !== comp) typeDiff(e.data);
+  comp = ""; composing = false;
+});
+ta.addEventListener("input", e => {
+  if (e.inputType === "insertCompositionText") typeDiff(e.data || "");
+  clearTimeout(resetT); resetT = setTimeout(resetKb, 700);
+});
+$("kb").addEventListener("click", () => { if (document.activeElement === ta) ta.blur(); else ta.focus(); });
+
+// Các nút phím đặc biệt (không làm mất bàn phím đang mở)
+$("keys").addEventListener("pointerdown", e => { if (e.target.closest("button")) e.preventDefault(); });
+$("keys").addEventListener("click", e => {
+  const b = e.target.closest("button[data-k]");
+  if (b && emu) emu.keyboard_send_keys([+b.dataset.k]);
+});
+$("cad").addEventListener("click", () => {
+  if (emu) emu.keyboard_send_scancodes([0x1D, 0x38, 0xE053, 0xE0D3, 0xB8, 0x9D]);
+});
 
 $("start").onclick = start;
 $("stop").onclick = stop;
